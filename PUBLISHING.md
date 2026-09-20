@@ -85,14 +85,25 @@ creation and supplying credentials.
    `gradle.publish.key`/`gradle.publish.secret` (Gradle properties, or env vars) --
    **never commit these**.
 
-### Maven Central (`runtime`, `proto`)
+### Maven Central (`runtime`, `proto`) -- DONE, published 2026-09-20
 
 1. Create a Central Portal account (https://central.sonatype.com/) and verify the
    `com.jitinsharma.cronetinspector` namespace against the `jitinsharma.com` domain
    (DNS TXT record) -- this repo already uses that namespace specifically so this
    step doesn't require buying a new domain.
 2. Generate a GPG signing key; Central requires all artifacts to be signed.
-3. Supply credentials as Gradle properties or env vars (never committed):
+3. **Publish the signing key's *public* half to a keyserver Central checks**
+   (`keyserver.ubuntu.com`, `keys.openpgp.org`, or `pgp.mit.edu` -- confirmed working:
+   `gpg --keyserver keyserver.ubuntu.com --send-keys <fingerprint>`). Easy to miss if
+   the key was generated some way other than `gpg --gen-key` (e.g. directly via a
+   library): nothing else in this flow publishes it for you, and Central's upload
+   validation fails with "Could not find a public key by the key fingerprint" without
+   it -- hit live on the very first publish attempt here. Expect a propagation delay
+   between sending the key and Central's own validation actually seeing it (a few
+   minutes, even after `gpg --recv-keys` from the same keyserver already confirms
+   it's live) -- the first attempt after sending failed the same way, a retry ~3
+   minutes later succeeded.
+4. Supply credentials as Gradle properties or env vars (never committed):
    ```
    ORG_GRADLE_PROJECT_mavenCentralUsername=<Central Portal user token username>
    ORG_GRADLE_PROJECT_mavenCentralPassword=<Central Portal user token password>
@@ -102,18 +113,20 @@ creation and supplying credentials.
    ```
    (The Central username/password are Central Portal user tokens, not your account
    login.)
-4. Publish proto and runtime as **two separate commands** (see "What's already
+5. Publish proto and runtime as **two separate commands** (see "What's already
    wired up" above for why -- one combined invocation still hits a classloader
    conflict):
    ```
    ./gradlew -PpublishProto=true :proto:publishToMavenCentral
    ./gradlew -PpublishRuntime=true :runtime:publishToMavenCentral
    ```
-   (or whichever exact task name the plugin version in use exposes -- check
-   `./gradlew -PpublishProto=true :proto:tasks` -- `publishToMavenCentral` was
-   configured with `automaticRelease = true` above, so a single publish per module
-   should be enough, no separate manual "release" step on the Central Portal
-   website).
+   `publishToMavenCentral` was configured with `automaticRelease = true`, so a
+   single publish per module is enough -- no separate manual "release" step on the
+   Central Portal website. Both succeeded 2026-09-20 (deployment ids
+   `0d394d2e-7345-4a2d-8093-df70ede5235c` for proto,
+   `0c544e51-8815-4d9d-b784-3626b134e90d` for runtime). Full propagation to
+   `repo1.maven.org` / search can take up to a couple hours after a successful
+   deployment.
 
 ### JetBrains Marketplace (`idea-plugin`)
 
