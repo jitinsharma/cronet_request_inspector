@@ -1,0 +1,21 @@
+<idea-plugin>
+    <id>dev.cronetinspector.ideaplugin</id>
+    <name>Cronet Network Inspector</name>
+    <vendor>Cronet Network Inspector</vendor>
+    <description>
+        Live network traffic inspection for apps using Cronet, mirroring Android
+        Studio's built-in Network Inspector (which does not support Cronet). See the
+        project plan's "idea-plugin" section for the transport this sits on top of.
+    </description>
+
+    <!-- Android-Studio-only: depends on the bundled Android plugin for ddmlib/adb
+         access, so this must not be flagged as loadable in plain IntelliJ IDEA. -->
+    <depends>com.intellij.modules.androidstudio</depends>
+    <depends>org.jetbrains.android</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="Cronet Inspector"
+                    anchor="bottom"
+                    factoryClass="dev.cronetinspector.ideaplugin.ui.CronetToolWindowFactory"/>
+    </extensions>
+</idea-plugin>

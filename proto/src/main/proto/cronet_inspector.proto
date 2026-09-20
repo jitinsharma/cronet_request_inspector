@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+package dev.cronetinspector.proto;
+
+option java_package = "dev.cronetinspector.proto";
+option java_multiple_files = true;
+option optimize_for = LITE_RUNTIME;
+
+// Shared wire schema between the in-app runtime and the IDE plugin (see plan's
+// "proto" component). Lives inside runtime/src/main/proto for now, rather than a
+// separate Gradle module, until the idea-plugin (Milestone 5) also needs to consume
+// it -- at that point this directory is the one to extract.
+
+message Header {
+  string name = 1;
+  string value = 2;
+}
+
+enum Direction {
+  DIRECTION_UNSPECIFIED = 0;
+  REQUEST = 1;
+  RESPONSE = 2;
+}
+
+enum Status {
+  STATUS_UNSPECIFIED = 0;
+  SUCCEEDED = 1;
+  FAILED = 2;
+  CANCELED = 3;
+}
+
+message RequestStarted {
+  string request_id = 1;
+  string url = 2;
+  string method = 3;
+  repeated Header headers = 4;
+  int64 timestamp_millis = 5;
+  string thread_name = 6;
+}
+
+message RedirectReceived {
+  string request_id = 1;
+  string new_location_url = 2;
+  int32 status_code = 3;
+  int64 timestamp_millis = 4;
+}
+
+message ResponseStarted {
+  string request_id = 1;
+  int32 status_code = 2;
+  string status_text = 3;
+  repeated Header headers = 4;
+  string negotiated_protocol = 5;
+  int64 timestamp_millis = 6;
+}
+
+message BodyChunk {
+  string request_id = 1;
+  Direction direction = 2;
+  bytes data = 3;
+  // True once this request's direction has hit its capture size cap; this chunk
+  // may still carry a partial (non-empty) tail of allowed bytes.
+  bool truncated = 4;
+}
+
+message RequestCompleted {
+  string request_id = 1;
+  Status status = 2;
+  string error_message = 3;
+  int64 timestamp_millis = 4;
+  int64 sent_byte_count = 5;
+  int64 received_byte_count = 6;
+}
+
+message Event {
+  oneof kind {
+    RequestStarted request_started = 1;
+    RedirectReceived redirect_received = 2;
+    ResponseStarted response_started = 3;
+    BodyChunk body_chunk = 4;
+    RequestCompleted request_completed = 5;
+  }
+}

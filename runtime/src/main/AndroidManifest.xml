@@ -1,0 +1,15 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!--
+          Zero-code auto-init: manifest merger wires this into the consuming app
+          automatically, so the socket server starts at process start with no
+          Application-class changes required, the same pattern Firebase/WorkManager
+          use for their own auto-init providers.
+        -->
+        <provider
+            android:name="dev.cronetinspector.runtime.CronetInspectorInitProvider"
+            android:authorities="${applicationId}.cronetinspector-init"
+            android:exported="false"
+            android:initOrder="100" />
+    </application>
+</manifest>

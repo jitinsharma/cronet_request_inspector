@@ -1,0 +1,18 @@
+.gradle/
+build/
+*/build/
+.idea/
+*.iml
+local.properties
+.DS_Store
+captures/
+.cxx/
+
+# IntelliJ Platform Gradle Plugin: downloaded platform artifacts, generated local
+# Ivy modules for local()-declared dependencies, and the runIde sandbox (config,
+# plugins, system data for the sandboxed Android Studio instance).
+.intellijPlatform/
+
+# Reference screenshots of Android Studio's own built-in Network Inspector (used as
+# design reference for the idea-plugin UI) -- not our own tool's UI, kept local only.
+Screenshot*.png
