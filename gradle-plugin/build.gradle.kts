@@ -18,8 +18,8 @@ dependencies {
 gradlePlugin {
     plugins {
         create("cronetInspector") {
-            id = "dev.cronetinspector.gradle"
-            implementationClass = "dev.cronetinspector.gradle.CronetInspectorPlugin"
+            id = "com.jitinsharma.cronetinspector.gradle"
+            implementationClass = "com.jitinsharma.cronetinspector.gradle.CronetInspectorPlugin"
         }
     }
 }

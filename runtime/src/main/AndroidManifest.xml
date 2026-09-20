@@ -7,7 +7,7 @@
           use for their own auto-init providers.
         -->
         <provider
-            android:name="dev.cronetinspector.runtime.CronetInspectorInitProvider"
+            android:name="com.jitinsharma.cronetinspector.runtime.CronetInspectorInitProvider"
             android:authorities="${applicationId}.cronetinspector-init"
             android:exported="false"
             android:initOrder="100" />

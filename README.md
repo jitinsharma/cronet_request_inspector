@@ -60,7 +60,7 @@ explicitly, see each `build.gradle.kts` for why).
 
 To try the Gradle plugin against your own Cronet-using app, point your project's
 `settings.gradle.kts` at this repo's `gradle-plugin` via `includeBuild(...)`, and
-apply `id("dev.cronetinspector.gradle")` in your app module.
+apply `id("com.jitinsharma.cronetinspector.gradle")` in your app module.
 
 To run the IDE plugin in a sandboxed Android Studio instance:
 

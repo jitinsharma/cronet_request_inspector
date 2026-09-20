@@ -5,21 +5,21 @@ outside this monorepo. `sample-app` never gets published (it's the test fixture)
 
 | Module | Channel | Why |
 |---|---|---|
-| `gradle-plugin` | [Gradle Plugin Portal](https://plugins.gradle.org/) | The idiomatic channel for a Gradle plugin -- consumers resolve it via `plugins { id("dev.cronetinspector.gradle") version "..." }`, not a `classpath` dependency. |
-| `runtime`, `proto` | Maven Central | Regular library dependencies. `gradle-plugin` auto-adds `debugImplementation("dev.cronetinspector:runtime:<version>")` when it detects a Cronet dependency and `:runtime` isn't available as a sibling project (i.e. for any consumer outside this repo) -- that coordinate needs to actually resolve. |
+| `gradle-plugin` | [Gradle Plugin Portal](https://plugins.gradle.org/) | The idiomatic channel for a Gradle plugin -- consumers resolve it via `plugins { id("com.jitinsharma.cronetinspector.gradle") version "..." }`, not a `classpath` dependency. |
+| `runtime`, `proto` | Maven Central | Regular library dependencies. `gradle-plugin` auto-adds `debugImplementation("com.jitinsharma.cronetinspector:runtime:<version>")` when it detects a Cronet dependency and `:runtime` isn't available as a sibling project (i.e. for any consumer outside this repo) -- that coordinate needs to actually resolve. |
 | `idea-plugin` | [JetBrains Marketplace](https://plugins.jetbrains.com/) | The standard channel for IntelliJ Platform / Android Studio plugins. |
 
 ## What's already wired up
 
 - `proto` and `runtime` both have `maven-publish` configured (`group =
-  "dev.cronetinspector"`, versioned independently of the other modules). Verified
+  "com.jitinsharma.cronetinspector"`, versioned independently of the other modules). Verified
   working end-to-end:
   ```
   ./gradlew :proto:publishToMavenLocal :runtime:publishToMavenLocal
   ```
-  produces real artifacts under `~/.m2/repository/dev/cronetinspector/...`, and
+  produces real artifacts under `~/.m2/repository/com/jitinsharma/cronetinspector/...`, and
   `runtime`'s generated POM correctly resolves its `project(":proto")` dependency to
-  the `dev.cronetinspector:proto:<version>` coordinate -- exactly what an external
+  the `com.jitinsharma.cronetinspector:proto:<version>` coordinate -- exactly what an external
   consumer's dependency resolution would see.
 
 ## What's NOT done yet (needs your own accounts/credentials)
@@ -41,7 +41,7 @@ respective accounts -- these aren't things that can be set up on your behalf.
 ### Maven Central (`runtime`, `proto`)
 
 1. Create a Central Portal account (https://central.sonatype.com/) and register/
-   verify ownership of the `dev.cronetinspector` namespace (or switch to a namespace
+   verify ownership of the `com.jitinsharma.cronetinspector` namespace (or switch to a namespace
    you actually control, e.g. a `io.github.<username>`-style group id, which Central
    accepts without separate domain verification).
 2. Generate a GPG signing key; Central requires all artifacts to be signed.
@@ -53,7 +53,7 @@ respective accounts -- these aren't things that can be set up on your behalf.
 ### JetBrains Marketplace (`idea-plugin`)
 
 1. Create a JetBrains Marketplace account and register a unique plugin ID (the
-   current `dev.cronetinspector.ideaplugin` in `plugin.xml` is a placeholder --
+   current `com.jitinsharma.cronetinspector.ideaplugin` in `plugin.xml` is a placeholder --
    confirm it's actually available, or pick a different one).
 2. Add a real plugin icon, a Marketplace-quality description, and a changelog.
 3. Sign the plugin (`intellijPlatform.signing` in the IntelliJ Platform Gradle

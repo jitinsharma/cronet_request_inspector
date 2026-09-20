@@ -1,7 +1,7 @@
 plugins {
     id("com.android.application") version "9.1.1"
     id("org.jetbrains.kotlin.android") version "2.2.10"
-    id("dev.cronetinspector.gradle")
+    id("com.jitinsharma.cronetinspector.gradle")
 }
 
 android {

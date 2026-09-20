@@ -1,5 +1,5 @@
 <idea-plugin>
-    <id>dev.cronetinspector.ideaplugin</id>
+    <id>com.jitinsharma.cronetinspector.ideaplugin</id>
     <name>Cronet Network Inspector</name>
     <vendor>Cronet Network Inspector</vendor>
     <description>
@@ -16,6 +16,6 @@
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow id="Cronet Inspector"
                     anchor="bottom"
-                    factoryClass="dev.cronetinspector.ideaplugin.ui.CronetToolWindowFactory"/>
+                    factoryClass="com.jitinsharma.cronetinspector.ideaplugin.ui.CronetToolWindowFactory"/>
     </extensions>
 </idea-plugin>

@@ -8,7 +8,7 @@ plugins {
     `maven-publish`
 }
 
-group = "dev.cronetinspector"
+group = "com.jitinsharma.cronetinspector"
 version = "0.1.0"
 
 repositories {
