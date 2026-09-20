@@ -6,7 +6,11 @@ plugins {
     // otherwise. Unrelated to AGP's own KGP floor (that applies to the Android
     // modules below, not to this standalone Gradle-plugin project's own compiler).
     kotlin("jvm") version "2.4.20"
+    id("com.gradle.plugin-publish") version "2.2.1"
 }
+
+group = "com.jitinsharma.cronetinspector"
+version = "0.1.0"
 
 dependencies {
     compileOnly("com.android.tools.build:gradle:9.1.1")
@@ -16,10 +20,19 @@ dependencies {
 }
 
 gradlePlugin {
+    website = "https://github.com/jitinsharma/cronet_request_inspector"
+    vcsUrl = "https://github.com/jitinsharma/cronet_request_inspector"
+
     plugins {
         create("cronetInspector") {
             id = "com.jitinsharma.cronetinspector.gradle"
             implementationClass = "com.jitinsharma.cronetinspector.gradle.CronetInspectorPlugin"
+            displayName = "Cronet Network Inspector"
+            description =
+                "Auto-instruments Cronet (org.chromium.net) HTTP traffic for the Cronet " +
+                    "Network Inspector Android Studio plugin -- no app code changes " +
+                    "required. Applies to debug builds only."
+            tags = listOf("android", "cronet", "networking", "debugging", "network-inspector")
         }
     }
 }

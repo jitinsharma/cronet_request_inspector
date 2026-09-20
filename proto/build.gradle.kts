@@ -1,3 +1,5 @@
+import org.gradle.plugins.signing.Sign
+
 plugins {
     // Must match runtime/sample-app's Kotlin version (2.2.10, AGP 9's KGP floor):
     // runtime depends on this module directly, and Kotlin metadata isn't forward
@@ -5,7 +7,7 @@ plugins {
     // for the unrelated reason of matching Gradle's own bundled Kotlin runtime).
     kotlin("jvm") version "2.2.10"
     id("com.google.protobuf") version "0.9.4"
-    `maven-publish`
+    id("com.vanniktech.maven.publish") version "0.37.0"
 }
 
 group = "com.jitinsharma.cronetinspector"
@@ -16,10 +18,45 @@ repositories {
     mavenCentral()
 }
 
-publishing {
-    publications {
-        create<MavenPublication>("maven") {
-            from(components["java"])
+// Supersedes the plain `maven-publish` + `publishing{}` block this used to have:
+// this plugin builds on top of maven-publish (publishToMavenLocal etc. still work
+// exactly as before, verified against real httpbench consumption) and adds what
+// Central actually requires beyond that -- signing, the newer Central Portal
+// upload API (not the legacy OSSRH staging flow `maven-publish` alone can't do),
+// and the POM metadata (license/developer/scm) Central validates on upload. See
+// PUBLISHING.md for the account/credential setup this still needs.
+mavenPublishing {
+    publishToMavenCentral(automaticRelease = true)
+    signAllPublications()
+
+    coordinates(group.toString(), "proto", version.toString())
+
+    pom {
+        name.set("Cronet Network Inspector -- proto")
+        description.set(
+            "Shared wire schema (length-prefixed protobuf) between the Cronet " +
+                "Network Inspector's in-app runtime and its Android Studio plugin."
+        )
+        url.set("https://github.com/jitinsharma/cronet_request_inspector")
+        licenses {
+            license {
+                name.set("The Apache License, Version 2.0")
+                url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+            }
+        }
+        developers {
+            developer {
+                id.set("jitinsharma")
+                name.set("Jitin Sharma")
+                url.set("https://github.com/jitinsharma/")
+            }
+        }
+        scm {
+            url.set("https://github.com/jitinsharma/cronet_request_inspector/")
+            connection.set("scm:git:git://github.com/jitinsharma/cronet_request_inspector.git")
+            developerConnection.set(
+                "scm:git:ssh://git@github.com/jitinsharma/cronet_request_inspector.git"
+            )
         }
     }
 }
@@ -47,6 +84,17 @@ protobuf {
             }
         }
     }
+}
+
+// signAllPublications() above makes EVERY publish task -- including
+// publishToMavenLocal, our fast local-iteration loop for testing against a real
+// external app (see PUBLISHING.md) -- fail outright with "no configured
+// signatory" unless a GPG key is present, since Gradle's signing plugin doesn't
+// otherwise distinguish "publishing to Central" from "publishing to Local". Only
+// actually sign when the Central signing key is configured; Central itself still
+// rejects unsigned artifacts on upload regardless of this.
+tasks.withType<Sign>().configureEach {
+    onlyIf { providers.gradleProperty("signingInMemoryKey").orNull != null }
 }
 
 // `compilerOptions.jvmTarget`, not `jvmToolchain(17)`: jvmToolchain() also triggers
