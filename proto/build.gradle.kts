@@ -1,3 +1,4 @@
+import com.vanniktech.maven.publish.MavenPublishBaseExtension
 import org.gradle.plugins.signing.Sign
 
 plugins {
@@ -7,7 +8,14 @@ plugins {
     // for the unrelated reason of matching Gradle's own bundled Kotlin runtime).
     kotlin("jvm") version "2.2.10"
     id("com.google.protobuf") version "0.9.4"
-    id("com.vanniktech.maven.publish") version "0.37.0"
+    // `apply false`, applied conditionally below -- see that block's comment for
+    // why. Declaring it here (rather than at the root, or omitting it and applying
+    // imperatively with no plugins{} entry at all) keeps it in the SAME classloader
+    // scope as this project's own kotlin("jvm") above, which
+    // com.vanniktech.maven.publish's own plugin code needs (it reflectively checks
+    // Kotlin's plugin classes on apply, and throws if they're not in the same
+    // classloader as itself).
+    id("com.vanniktech.maven.publish") version "0.37.0" apply false
 }
 
 group = "com.jitinsharma.cronetinspector"
@@ -16,49 +24,6 @@ version = "0.1.0"
 repositories {
     google()
     mavenCentral()
-}
-
-// Supersedes the plain `maven-publish` + `publishing{}` block this used to have:
-// this plugin builds on top of maven-publish (publishToMavenLocal etc. still work
-// exactly as before, verified against real httpbench consumption) and adds what
-// Central actually requires beyond that -- signing, the newer Central Portal
-// upload API (not the legacy OSSRH staging flow `maven-publish` alone can't do),
-// and the POM metadata (license/developer/scm) Central validates on upload. See
-// PUBLISHING.md for the account/credential setup this still needs.
-mavenPublishing {
-    publishToMavenCentral(automaticRelease = true)
-    signAllPublications()
-
-    coordinates(group.toString(), "proto", version.toString())
-
-    pom {
-        name.set("Cronet Network Inspector -- proto")
-        description.set(
-            "Shared wire schema (length-prefixed protobuf) between the Cronet " +
-                "Network Inspector's in-app runtime and its Android Studio plugin."
-        )
-        url.set("https://github.com/jitinsharma/cronet_request_inspector")
-        licenses {
-            license {
-                name.set("The Apache License, Version 2.0")
-                url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
-            }
-        }
-        developers {
-            developer {
-                id.set("jitinsharma")
-                name.set("Jitin Sharma")
-                url.set("https://github.com/jitinsharma/")
-            }
-        }
-        scm {
-            url.set("https://github.com/jitinsharma/cronet_request_inspector/")
-            connection.set("scm:git:git://github.com/jitinsharma/cronet_request_inspector.git")
-            developerConnection.set(
-                "scm:git:ssh://git@github.com/jitinsharma/cronet_request_inspector.git"
-            )
-        }
-    }
 }
 
 dependencies {
@@ -86,15 +51,88 @@ protobuf {
     }
 }
 
-// signAllPublications() above makes EVERY publish task -- including
-// publishToMavenLocal, our fast local-iteration loop for testing against a real
-// external app (see PUBLISHING.md) -- fail outright with "no configured
-// signatory" unless a GPG key is present, since Gradle's signing plugin doesn't
-// otherwise distinguish "publishing to Central" from "publishing to Local". Only
-// actually sign when the Central signing key is configured; Central itself still
-// rejects unsigned artifacts on upload regardless of this.
-tasks.withType<Sign>().configureEach {
-    onlyIf { providers.gradleProperty("signingInMemoryKey").orNull != null }
+// Maven Central publishing, gated behind a Gradle property (`-PpublishProto=true`)
+// instead of applied unconditionally.
+//
+// Why: com.vanniktech.maven.publish registers a shared MavenCentralBuildService.
+// Applying it unconditionally in BOTH this module and runtime (which also
+// publishes to Central) makes Gradle load that service under a SEPARATE
+// classloader per project ("Cannot set the value of task ... using a provider ...
+// loaded with [a different] InstrumentingVisitableURLClassLoader"), which breaks
+// EVERY IDE sync/multi-project build regardless of whether you're actually trying
+// to publish -- confirmed live, this is exactly what broke on IntelliJ project
+// import. Root-level `apply false` + subproject `apply` (Gradle's own documented
+// fix for that specific problem) was tried and rejected: it also requires the
+// Kotlin plugin the publish plugin auto-detects to be centralized the SAME way,
+// and this module's Kotlin version (2.2.10, an AGP 9 requirement, confirmed by a
+// live `com.android.build.gradle.BaseExtension` failure when bumped) can't be
+// unified with idea-plugin's separate, incompatible use of the same Kotlin plugin
+// ID at 2.4.20.
+//
+// Gating the actual `apply()` call behind a flag means normal builds and IDE
+// import never load this plugin in either module at all, so the cross-module
+// classloader conflict never triggers. Publishing for real means running proto and
+// runtime as two SEPARATE `./gradlew` invocations (each with only its own
+// `-Ppublish<Module>=true`), e.g.:
+//   ./gradlew -PpublishProto=true :proto:publishToMavenCentral
+//   ./gradlew -PpublishRuntime=true :runtime:publishToMavenCentral
+// -- not combined in one command, since Gradle configures the whole project graph
+// per invocation regardless of which task is requested, so a single invocation
+// with both flags set would still hit the same conflict.
+if (providers.gradleProperty("publishProto").isPresent) {
+    apply(plugin = "com.vanniktech.maven.publish")
+
+    // configure<MavenPublishBaseExtension>, not the `mavenPublishing { }`
+    // type-safe accessor: that accessor is only generated for a plugin declared
+    // WITHOUT `apply false` -- since this one is conditionally applied, it has to
+    // be looked up this way instead.
+    configure<MavenPublishBaseExtension> {
+        publishToMavenCentral(automaticRelease = true)
+        signAllPublications()
+
+        coordinates(group.toString(), "proto", version.toString())
+
+        pom {
+            name.set("Cronet Network Inspector -- proto")
+            description.set(
+                "Shared wire schema (length-prefixed protobuf) between the Cronet " +
+                    "Network Inspector's in-app runtime and its Android Studio plugin."
+            )
+            url.set("https://github.com/jitinsharma/cronet_request_inspector")
+            licenses {
+                license {
+                    name.set("The Apache License, Version 2.0")
+                    url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+                }
+            }
+            developers {
+                developer {
+                    id.set("jitinsharma")
+                    name.set("Jitin Sharma")
+                    url.set("https://github.com/jitinsharma/")
+                }
+            }
+            scm {
+                url.set("https://github.com/jitinsharma/cronet_request_inspector/")
+                connection.set("scm:git:git://github.com/jitinsharma/cronet_request_inspector.git")
+                developerConnection.set(
+                    "scm:git:ssh://git@github.com/jitinsharma/cronet_request_inspector.git"
+                )
+            }
+        }
+    }
+
+    // signAllPublications() above makes EVERY publish task -- including
+    // publishToMavenLocal, our fast local-iteration loop for testing against a
+    // real external app (see PUBLISHING.md) -- fail outright with "no configured
+    // signatory" unless a GPG key is present, since Gradle's signing plugin
+    // doesn't otherwise distinguish "publishing to Central" from "publishing to
+    // Local". Only actually sign when the Central signing key is configured;
+    // Central itself still rejects unsigned artifacts on upload regardless of
+    // this.
+    tasks.withType<Sign>().configureEach {
+        onlyIf { providers.gradleProperty("signingInMemoryKey").orNull != null }
+    }
 }
 
 // `compilerOptions.jvmTarget`, not `jvmToolchain(17)`: jvmToolchain() also triggers

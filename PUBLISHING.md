@@ -19,6 +19,29 @@ outside this monorepo. `sample-app` never gets published (it's the test fixture)
   -- Central validates these on upload). `runtime` additionally uses
   `configure(AndroidSingleVariantLibrary(variant = "debug", ...))` since it
   publishes an AAR, not a plain jar.
+- **The plugin is applied conditionally**, gated behind a Gradle property
+  (`-PpublishProto=true` / `-PpublishRuntime=true`), not unconditionally in the
+  `plugins{}` block. Reason: `com.vanniktech.maven.publish` registers a shared
+  `MavenCentralBuildService`; applying it unconditionally in both modules made
+  Gradle load that service under a separate classloader per project ("Cannot set
+  the value of task ... using a provider ... loaded with [a different]
+  InstrumentingVisitableURLClassLoader"), which broke **every** multi-project
+  configure -- including plain IntelliJ project import, confirmed live, regardless
+  of whether you were trying to publish at all. A root-level `apply false` +
+  subproject `apply` (Gradle's own documented fix for that specific symptom) was
+  tried and rejected: the plugin also reflectively checks Kotlin's own plugin
+  classes on `apply()` (confirmed by reading `MavenPublishBasePlugin.kt` directly)
+  and throws unless Kotlin and the plugin share a classloader too -- and proto's
+  Kotlin version (2.2.10, a real AGP 9 requirement, not just a floor: bumping it
+  broke with a missing `com.android.build.gradle.BaseExtension`) can't be unified
+  with idea-plugin's separately-versioned, incompatible use of the same Kotlin
+  plugin ID (2.4.20). Gating the actual `apply()` call means normal builds and IDE
+  import never load the plugin in either module, so the conflict never triggers.
+  **Consequence**: publishing proto and runtime for real means two *separate*
+  `./gradlew` invocations, not one combined command (see below) -- a single
+  invocation with both flags set still hits the same conflict, since Gradle
+  configures the whole project graph per invocation regardless of which task is
+  requested.
 - Signing is conditional (`tasks.withType<Sign>().configureEach { onlyIf { ... } }`
   keyed on whether `signingInMemoryKey` is set) specifically so
   `publishToMavenLocal` keeps working for local iteration without a GPG key
@@ -28,14 +51,18 @@ outside this monorepo. `sample-app` never gets published (it's the test fixture)
   against a real external app (httpbench). Verified working end-to-end after this
   fix:
   ```
-  ./gradlew :proto:publishToMavenLocal :runtime:publishToMavenLocal
+  ./gradlew -PpublishProto=true :proto:publishToMavenLocal
+  ./gradlew -PpublishRuntime=true :runtime:publishToMavenLocal
   ```
-  produces real artifacts under `~/.m2/repository/com/jitinsharma/cronetinspector/...`
-  with `signMavenPublication` correctly `SKIPPED`, and `runtime`'s generated POM
-  correctly resolves its `project(":proto")` dependency to the
-  `com.jitinsharma.cronetinspector:proto:<version>` coordinate -- exactly what an
-  external consumer's dependency resolution would see. `Sign` tasks stay live for
-  an actual `publishToMavenCentral` once the signing key below is configured.
+  (run as two separate commands, per above) produces real artifacts under
+  `~/.m2/repository/com/jitinsharma/cronetinspector/...` with `signMavenPublication`
+  actually running and producing `.asc` signature files for every artifact, and
+  `runtime`'s generated POM correctly resolves its `project(":proto")` dependency
+  to the `com.jitinsharma.cronetinspector:proto:<version>` coordinate -- exactly
+  what an external consumer's dependency resolution would see. Without either
+  `-Ppublish*` flag, `signMavenPublication` doesn't exist at all (the plugin isn't
+  applied), and `publishToMavenLocal` still works unsigned, same as before any of
+  this.
 - `gradle-plugin` has the `com.gradle.plugin-publish` plugin configured
   (`group`/`version` set, `website`/`vcsUrl`/`displayName`/`description`/`tags` on
   the plugin declaration -- all required by the portal). Verified as far as
@@ -75,11 +102,18 @@ creation and supplying credentials.
    ```
    (The Central username/password are Central Portal user tokens, not your account
    login.)
-4. `./gradlew :proto:publishAndReleaseToMavenCentral :runtime:publishAndReleaseToMavenCentral`
-   (or whichever exact task the plugin version in use exposes -- check
-   `./gradlew :proto:tasks` -- `publishToMavenCentral` was configured with
-   `automaticRelease = true` above, so a single publish should be enough, no
-   separate manual "release" step on the Central Portal website).
+4. Publish proto and runtime as **two separate commands** (see "What's already
+   wired up" above for why -- one combined invocation still hits a classloader
+   conflict):
+   ```
+   ./gradlew -PpublishProto=true :proto:publishToMavenCentral
+   ./gradlew -PpublishRuntime=true :runtime:publishToMavenCentral
+   ```
+   (or whichever exact task name the plugin version in use exposes -- check
+   `./gradlew -PpublishProto=true :proto:tasks` -- `publishToMavenCentral` was
+   configured with `automaticRelease = true` above, so a single publish per module
+   should be enough, no separate manual "release" step on the Central Portal
+   website).
 
 ### JetBrains Marketplace (`idea-plugin`)
 
