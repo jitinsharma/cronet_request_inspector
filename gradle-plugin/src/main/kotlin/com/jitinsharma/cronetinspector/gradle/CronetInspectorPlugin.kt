@@ -3,6 +3,7 @@ package com.jitinsharma.cronetinspector.gradle
 import com.android.build.api.instrumentation.FramesComputationMode
 import com.android.build.api.instrumentation.InstrumentationScope
 import com.android.build.api.variant.AndroidComponentsExtension
+import com.android.build.api.variant.Variant
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
@@ -47,18 +48,35 @@ class CronetInspectorPlugin : Plugin<Project> {
                 variant.instrumentation.setAsmFramesComputationMode(
                     FramesComputationMode.COMPUTE_FRAMES_FOR_INSTRUMENTED_METHODS
                 )
-            }
 
-            // Runs after the module's own build.gradle.kts (including its
-            // `dependencies {}` block) has been fully evaluated, so the Cronet
-            // dependency -- if present -- is already visible here.
-            project.afterEvaluate {
-                if (!hasCronetTransitively(project)) return@afterEvaluate
+                // Runs after the module's own build.gradle.kts (including its
+                // `dependencies {}` block) has been fully evaluated, so the Cronet
+                // dependency -- if present -- is already visible here.
+                //
+                // Keyed off `variant` (its own runtimeConfiguration and name), not
+                // hardcoded "debugRuntimeClasspath"/"debugImplementation" strings:
+                // those literal names only exist for a project with zero product
+                // flavors. A flavored project's actual debug-buildType variant is
+                // named e.g. "prodDebug", with configurations
+                // "prodDebugRuntimeClasspath"/"prodDebugImplementation" -- the
+                // hardcoded names silently matched nothing there
+                // (configurations.findByName returned null, so this whole block
+                // used to just no-op), while instrumentation above -- already
+                // correctly variant-scoped via `onVariants` -- still ran and
+                // rewrote real Cronet callback classes to call
+                // CronetInspectorRuntime. That combination is exactly what produced
+                // a live NoClassDefFoundError for
+                // com.jitinsharma.cronetinspector.runtime.CronetInspectorRuntime in
+                // a real flavored app: instrumentation active, runtime dependency
+                // never added.
+                project.afterEvaluate {
+                    if (!hasCronetTransitively(variant)) return@afterEvaluate
 
-                val runtimeProject = project.rootProject.findProject(":runtime")
-                val runtimeDependencyNotation: Any =
-                    runtimeProject ?: "com.jitinsharma.cronetinspector:runtime:0.1.0"
-                project.dependencies.add("debugImplementation", runtimeDependencyNotation)
+                    val runtimeProject = project.rootProject.findProject(":runtime")
+                    val runtimeDependencyNotation: Any =
+                        runtimeProject ?: "com.jitinsharma.cronetinspector:runtime:0.1.0"
+                    project.dependencies.add("${variant.name}Implementation", runtimeDependencyNotation)
+                }
             }
         }
     }
@@ -71,15 +89,15 @@ class CronetInspectorPlugin : Plugin<Project> {
      * (`Configuration.allDependencies`) misses this entirely. Resolving the actual
      * dependency graph is the only reliable way to detect it.
      *
-     * Resolves a detached copy of debugRuntimeClasspath rather than the real one:
-     * resolving the real configuration here would permanently freeze it against
-     * further mutation, and the caller still needs to add debugImplementation(...)
-     * (which debugRuntimeClasspath extends) afterward.
+     * Resolves a detached copy of the variant's own runtimeConfiguration (AGP's
+     * variant-scoped, flavor-correct equivalent of "debugRuntimeClasspath" --
+     * see this method's caller for why that hardcoded name was wrong) rather than
+     * the real one: resolving the real configuration here would permanently freeze
+     * it against further mutation, and the caller still needs to add an
+     * Implementation dependency (which this configuration extends) afterward.
      */
-    private fun hasCronetTransitively(project: Project): Boolean {
-        val runtimeClasspath =
-            project.configurations.findByName("debugRuntimeClasspath") ?: return false
-        val detached = runtimeClasspath.copyRecursive()
+    private fun hasCronetTransitively(variant: Variant): Boolean {
+        val detached = variant.runtimeConfiguration.copyRecursive()
         detached.isCanBeResolved = true
         detached.isCanBeConsumed = false
         return detached.incoming.resolutionResult.allComponents.any { component ->
