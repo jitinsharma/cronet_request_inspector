@@ -4,6 +4,9 @@ import com.android.build.api.instrumentation.AsmClassVisitorFactory
 import com.android.build.api.instrumentation.ClassContext
 import com.android.build.api.instrumentation.ClassData
 import com.android.build.api.instrumentation.InstrumentationParameters
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.Optional
 import org.objectweb.asm.ClassVisitor
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes
@@ -61,21 +64,63 @@ private val URL_REQUEST_TYPE: Type = Type.getObjectType("org/chromium/net/UrlReq
  * of call-site rewrite the plan calls out as safe -- unlike wrapping every possible
  * callback-construction site.
  *
- * isInstrumentable is unconditionally true for everything EXCEPT Cronet's own
- * `org.chromium.net` package tree -- same as under the original PROJECT scope, at
- * ALL scope this means every other class in every dependency gets scanned (each
- * check itself is a handful of cheap string/int comparisons per instruction, but
- * AGP still has to enumerate every class), a real but currently-accepted build
- * time cost for debug builds only; see ROADMAP.md for a targeted follow-up filter.
- * The org.chromium.net exclusion mirrors CronetCallbackHookVisitorFactory's --
- * see its doc for why instrumenting Cronet's own (often minified) internal classes
- * is unsafe, not just unnecessary.
+ * isInstrumentable excludes Cronet's own `org.chromium.net` package tree (mirrors
+ * CronetCallbackHookVisitorFactory's exclusion -- see its doc for why instrumenting
+ * Cronet's own, often minified, internal classes is unsafe, not just unnecessary),
+ * then applies a cheap pre-filter for everything else, since at ALL scope this
+ * factory would otherwise be asked to fully scan (every method, every instruction)
+ * every class in every dependency -- AndroidX, Compose, Kotlin stdlib, all of it --
+ * to find five call sites that can only plausibly occur in the app's own code or a
+ * Cronet-adjacent bridge library (see ROADMAP.md's now-resolved entry for the
+ * before/after and why this wasn't done inline the first time):
+ *
+ *  - the app's OWN classes are always instrumentable, regardless of name -- there's
+ *    no naming convention to rely on for those (a call site could be in a class
+ *    named anything), so this is approximated via [CronetCallSiteParams.projectNamespace]:
+ *    the project's declared `android { namespace }`, which in practice is also the
+ *    package root every real Android project's own source lives under. Imperfect --
+ *    a project with source outside its declared namespace would miss instrumentation
+ *    there -- but that layout is exceedingly rare, and the alternative (no filter at
+ *    all) is the exact per-class-in-every-dependency cost this exists to avoid.
+ *  - everything else is only instrumentable if its name looks Cronet-related (see
+ *    [looksCronetRelated]) -- true for known bridge libraries like
+ *    `com.google.net.cronet:cronet-okhttp`'s `com.google.net.cronet.okhttptransport`
+ *    package, and, being a broad substring match, likely true for other
+ *    not-yet-encountered ones too. A random unrelated dependency (Compose, OkHttp
+ *    itself, Kotlin stdlib, ...) never calls Cronet's builder APIs, so skipping it
+ *    here is safe, not just fast.
  */
-abstract class CronetCallSiteVisitorFactory :
-    AsmClassVisitorFactory<InstrumentationParameters.None> {
+/**
+ * @property projectNamespace the app module's declared `android { namespace }`, used
+ * by [CronetCallSiteVisitorFactory.isInstrumentable] to always instrument the app's
+ * own classes regardless of name (see that class's doc). `@get:Input`, not
+ * `@get:Internal`: this IS a real instrumentation input -- a namespace change should
+ * invalidate the transform's up-to-date state, since it changes which classes get
+ * instrumented. `@get:Optional` since a project with no `namespace` set at all
+ * (legacy `package` attribute in the manifest instead) still needs the transform to
+ * run, just without the project-class fast path.
+ */
+interface CronetCallSiteParams : InstrumentationParameters {
+    @get:Input
+    @get:Optional
+    val projectNamespace: Property<String>
+}
 
-    override fun isInstrumentable(classData: ClassData): Boolean =
-        !classData.className.startsWith("org.chromium.net.")
+/**
+ * Broad, deliberately over-inclusive substring match -- see
+ * [CronetCallSiteVisitorFactory]'s doc for why being over-inclusive here is safe.
+ */
+private fun looksCronetRelated(className: String): Boolean = className.contains("cronet", ignoreCase = true)
+
+abstract class CronetCallSiteVisitorFactory :
+    AsmClassVisitorFactory<CronetCallSiteParams> {
+
+    override fun isInstrumentable(classData: ClassData): Boolean {
+        val className = classData.className
+        if (className.startsWith("org.chromium.net.")) return false
+        val namespace = parameters.get().projectNamespace.orNull
+        return (namespace != null && className.startsWith(namespace)) || looksCronetRelated(className)
+    }
 
     override fun createClassVisitor(
         classContext: ClassContext,

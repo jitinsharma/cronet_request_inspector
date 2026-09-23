@@ -1,5 +1,6 @@
 package com.jitinsharma.cronetinspector.gradle
 
+import com.android.build.api.dsl.CommonExtension
 import com.android.build.api.instrumentation.FramesComputationMode
 import com.android.build.api.instrumentation.InstrumentationScope
 import com.android.build.api.variant.AndroidComponentsExtension
@@ -21,6 +22,8 @@ class CronetInspectorPlugin : Plugin<Project> {
         project.plugins.withId("com.android.application") {
             val androidComponents =
                 project.extensions.getByType(AndroidComponentsExtension::class.java)
+            val projectNamespace =
+                project.extensions.getByType(CommonExtension::class.java).namespace
 
             androidComponents.onVariants(
                 androidComponents.selector().withBuildType("debug")
@@ -44,7 +47,7 @@ class CronetInspectorPlugin : Plugin<Project> {
                 variant.instrumentation.transformClassesWith(
                     CronetCallSiteVisitorFactory::class.java,
                     InstrumentationScope.ALL,
-                ) { }
+                ) { params -> params.projectNamespace.set(projectNamespace) }
                 variant.instrumentation.setAsmFramesComputationMode(
                     FramesComputationMode.COMPUTE_FRAMES_FOR_INSTRUMENTED_METHODS
                 )

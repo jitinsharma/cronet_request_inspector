@@ -2,26 +2,6 @@
 
 Planned enhancements, not yet implemented.
 
-## Filter `InstrumentationScope.ALL`'s per-class scan
-
-Both ASM visitors moved from `InstrumentationScope.PROJECT` to `ALL` (see
-`CronetInspectorPlugin`) to reach Cronet-OkHttp bridge libraries like
-`com.google.net.cronet:cronet-okhttp`, whose own `OkHttpBridgeRequestCallback`/
-`StreamingUploadDataProvider` classes implement `UrlRequest.Callback`/
-`UploadDataProvider` inside the library's own compiled bytecode -- invisible at
-`PROJECT` scope, confirmed against a real app (httpbench) that produced zero
-captured events until this fix.
-
-`CronetCallSiteVisitorFactory.isInstrumentable` is still unconditionally `true`,
-meaning every class in every dependency (AndroidX, Compose, Kotlin stdlib, ...) now
-gets enumerated and scanned, not just the handful of classes in the app's own
-module. Real but currently-accepted cost for debug builds only. A worthwhile
-follow-up: a cheap pre-filter (e.g. only classes whose package/class name looks
-Cronet-related) to cut down what actually gets the full per-instruction
-`MethodVisitor` treatment, without accidentally excluding the app's own
-arbitrarily-named classes (which is why this wasn't just done inline -- `ClassData`
-doesn't expose a simple "is this a project class" flag to build that filter on).
-
 ## Per-request network metrics via `RequestFinishedInfo.Metrics`
 
 Wire up `CronetEngine.addRequestFinishedListener(...)` (the `attachToEngine` stub in
