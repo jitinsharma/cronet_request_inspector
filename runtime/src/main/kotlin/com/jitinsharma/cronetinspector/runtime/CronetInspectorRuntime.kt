@@ -9,6 +9,7 @@ import com.jitinsharma.cronetinspector.proto.RedirectReceived
 import com.jitinsharma.cronetinspector.proto.RequestCompleted
 import com.jitinsharma.cronetinspector.proto.RequestStarted
 import com.jitinsharma.cronetinspector.proto.ResponseStarted
+import com.jitinsharma.cronetinspector.proto.StackFrame
 import com.jitinsharma.cronetinspector.proto.Status
 import org.chromium.net.CronetException
 import org.chromium.net.UploadDataSink
@@ -40,6 +41,7 @@ import java.util.UUID
 object CronetInspectorRuntime {
 
     private const val MAX_BODY_BYTES = 1 * 1024 * 1024
+    private const val MAX_CALL_STACK_FRAMES = 50
 
     @Volatile
     var sink: EventSink = EventSink.NONE
@@ -123,9 +125,43 @@ object CronetInspectorRuntime {
                     .addAllHeaders(headers)
                     .setTimestampMillis(System.currentTimeMillis())
                     .setThreadName(Thread.currentThread().name)
+                    .addAllCallStack(captureCallStack())
             ).build()
         )
     }
+
+    /**
+     * attachToRequest runs synchronously on the app's own calling thread -- the
+     * INVOKESTATIC call site sits right after the real `build()` call in the
+     * rewritten bytecode, which has already returned by the time this executes, so
+     * the current thread's stack is exactly the app's own call chain up to (but not
+     * including) `build()` itself, not Cronet's internal implementation or the
+     * background executor callbacks later run on. Drops the frames that are only
+     * this runtime's own plumbing (Thread.getStackTrace itself, captureCallStack,
+     * and its one caller attachToRequest) since none are useful to show the user;
+     * caps depth mainly to bound payload size for pathologically deep call chains
+     * (framework/coroutine dispatch chains routinely run 10-20 frames deep already,
+     * as the reference screenshots' own Call Stack tab shows).
+     */
+    private fun captureCallStack(): List<StackFrame> =
+        Thread.currentThread().stackTrace
+            // Thread.getStackTrace itself, this method, and attachToRequest (the
+            // only caller) -- confirmed empirically via a test asserting on the
+            // exact top frame, since it's easy to be off by one here.
+            .drop(3)
+            .take(MAX_CALL_STACK_FRAMES)
+            .map { element ->
+                val className = element.className
+                val lastDot = className.lastIndexOf('.')
+                val packageName = if (lastDot >= 0) className.substring(0, lastDot) else ""
+                val simpleClassName = if (lastDot >= 0) className.substring(lastDot + 1) else className
+                StackFrame.newBuilder()
+                    .setClassName(simpleClassName)
+                    .setPackageName(packageName)
+                    .setMethodName(element.methodName)
+                    .setLineNumber(element.lineNumber)
+                    .build()
+            }
 
     // --- UrlRequest.Callback lifecycle ----------------------------------------------
 

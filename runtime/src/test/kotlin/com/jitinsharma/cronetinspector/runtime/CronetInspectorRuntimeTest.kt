@@ -53,6 +53,26 @@ class CronetInspectorRuntimeTest {
     }
 
     @Test
+    fun `attachToRequest captures the calling thread's own call stack, split into class and package`() {
+        val builder = Any()
+        val request = mock<UrlRequest>()
+
+        CronetInspectorRuntime.recordUrl(builder, "https://httpbin.org/get")
+        CronetInspectorRuntime.attachToRequest(builder, request)
+
+        val frames = events.single().requestStarted.callStackList
+        assertTrue(frames.isNotEmpty())
+        // This test method itself, calling attachToRequest directly, must be the
+        // very first captured frame -- proves the capture point is the app's own
+        // calling thread/frame, not attachToRequest's own frame or
+        // Thread.getStackTrace's (which captureCallStack() deliberately drops).
+        val topFrame = frames.first()
+        assertEquals("CronetInspectorRuntimeTest", topFrame.className)
+        assertEquals("com.jitinsharma.cronetinspector.runtime", topFrame.packageName)
+        assertTrue(topFrame.lineNumber > 0)
+    }
+
+    @Test
     fun `attachToRequest defaults method to GET when setHttpMethod was never called`() {
         val builder = Any()
         val request = mock<UrlRequest>()

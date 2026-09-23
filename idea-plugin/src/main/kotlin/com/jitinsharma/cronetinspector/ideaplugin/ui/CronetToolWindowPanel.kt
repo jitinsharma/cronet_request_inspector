@@ -89,6 +89,7 @@ class CronetToolWindowPanel(
                 row.startTimeMillis = started.timestampMillis
                 row.threadName = started.threadName
                 row.requestHeaders = started.headersList
+                row.callStack = started.callStackList
                 row.status = "..."
             }
 
@@ -96,8 +97,13 @@ class CronetToolWindowPanel(
                 val started = event.responseStarted
                 row.status = started.statusCode.toString()
                 row.type = guessType(started.headersList)
+                row.contentType = started.headersList
+                    .firstOrNull { it.name.equals("content-type", ignoreCase = true) }
+                    ?.value
+                    .orEmpty()
                 row.negotiatedProtocol = started.negotiatedProtocol
                 row.responseHeaders = started.headersList
+                row.responseStartTimeMillis = started.timestampMillis
             }
 
             Event.KindCase.BODY_CHUNK -> withRow(event.bodyChunk.requestId) { row ->
