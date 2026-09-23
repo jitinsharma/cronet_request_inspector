@@ -17,6 +17,9 @@ private const val UPLOAD_READ_DESC = "(Lorg/chromium/net/UploadDataSink;Ljava/ni
 private const val UPLOAD_READ_HOOK_DESC =
     "(Ljava/lang/Object;Lorg/chromium/net/UploadDataSink;Ljava/nio/ByteBuffer;)V"
 
+private const val UPLOAD_DATA_SINK = "org/chromium/net/UploadDataSink"
+private const val ON_READ_SUCCEEDED = "onReadSucceeded"
+
 /**
  * (method name, method descriptor) -> hook name on CronetInspectorRuntime. The
  * runtime's hook methods were deliberately given identical parameter shapes to the
@@ -88,24 +91,50 @@ abstract class CronetCallbackHookVisitorFactory :
 
                 if (isUploadProvider && name == UPLOAD_READ_NAME && descriptor == UPLOAD_READ_DESC) {
                     return object : AdviceAdapter(Opcodes.ASM9, mv, access, name, descriptor) {
-                        // Deliberately an EXIT hook, not entry: unlike onReadCompleted
-                        // (where Cronet has already filled the buffer before invoking
-                        // the app's callback), UploadDataProvider.read()'s own method
-                        // BODY is what writes the upload bytes -- at method entry the
-                        // buffer is still empty. `this` (the provider instance) is the
-                        // hook's correlation key here, unlike the Callback methods
-                        // below where `this` is the callback object, not the request.
-                        override fun onMethodExit(opcode: Int) {
-                            if (opcode != Opcodes.RETURN) return // skip exceptional exits (ATHROW)
-                            loadThis()
-                            loadArgs()
-                            visitMethodInsn(
-                                Opcodes.INVOKESTATIC,
-                                RUNTIME_OWNER,
-                                "onUploadRead",
-                                UPLOAD_READ_HOOK_DESC,
-                                false,
-                            )
+                        // NOT an exit hook (an earlier version of this was): confirmed
+                        // live against a real device that Cronet consumes/resets the
+                        // upload buffer SYNCHRONOUSLY, as a side effect of the app's own
+                        // call to sink.onReadSucceeded() -- by the time read() actually
+                        // *returns*, the buffer's position was already back to 0 (looked
+                        // already-empty, "before writing" state) even though the app had
+                        // genuinely just written real bytes into it moments earlier.
+                        // Every real request's captured body came back empty because of
+                        // this.
+                        //
+                        // Instead, this intercepts calls the app's own read()
+                        // implementation makes to sink.onReadSucceeded(..) and injects
+                        // our capture call immediately BEFORE forwarding to the real
+                        // one -- i.e. right after the app has finished writing to the
+                        // buffer, but strictly before Cronet gets any chance to touch
+                        // it. `loadThis()`/`loadArgs()` here load read()'s OWN `this`
+                        // (the provider) and its OWN (sink, byteBuffer) parameters --
+                        // correct regardless of what's on the operand stack at the
+                        // onReadSucceeded call site itself, and correct even if the sink
+                        // reference at that call site went through a local variable
+                        // (loadArgs() always reflects the enclosing method's declared
+                        // parameters, not whatever's on the stack).
+                        //
+                        // Only onReadSucceeded, not onReadError: on error there's no
+                        // guarantee the buffer holds valid/complete intended data.
+                        override fun visitMethodInsn(
+                            opcode: Int,
+                            owner: String,
+                            calledName: String,
+                            calledDescriptor: String,
+                            isInterface: Boolean,
+                        ) {
+                            if (owner == UPLOAD_DATA_SINK && calledName == ON_READ_SUCCEEDED) {
+                                loadThis()
+                                loadArgs()
+                                visitMethodInsn(
+                                    Opcodes.INVOKESTATIC,
+                                    RUNTIME_OWNER,
+                                    "onUploadRead",
+                                    UPLOAD_READ_HOOK_DESC,
+                                    false,
+                                )
+                            }
+                            super.visitMethodInsn(opcode, owner, calledName, calledDescriptor, isInterface)
                         }
                     }
                 }
