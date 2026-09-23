@@ -109,8 +109,14 @@ interface CronetCallSiteParams : InstrumentationParameters {
 /**
  * Broad, deliberately over-inclusive substring match -- see
  * [CronetCallSiteVisitorFactory]'s doc for why being over-inclusive here is safe.
+ * Also used by [CronetCallbackHookVisitorFactory]'s own pre-filter.
  */
-private fun looksCronetRelated(className: String): Boolean = className.contains("cronet", ignoreCase = true)
+internal fun looksCronetRelated(className: String): Boolean = className.contains("cronet", ignoreCase = true)
+
+/** True for the app's own classes (see [CronetCallSiteParams.projectNamespace]'s doc) or
+ * anything Cronet-related -- shared pre-filter for both ASM visitor factories. */
+internal fun isProjectOrCronetRelated(className: String, projectNamespace: String?): Boolean =
+    (projectNamespace != null && className.startsWith(projectNamespace)) || looksCronetRelated(className)
 
 abstract class CronetCallSiteVisitorFactory :
     AsmClassVisitorFactory<CronetCallSiteParams> {
@@ -118,8 +124,7 @@ abstract class CronetCallSiteVisitorFactory :
     override fun isInstrumentable(classData: ClassData): Boolean {
         val className = classData.className
         if (className.startsWith("org.chromium.net.")) return false
-        val namespace = parameters.get().projectNamespace.orNull
-        return (namespace != null && className.startsWith(namespace)) || looksCronetRelated(className)
+        return isProjectOrCronetRelated(className, parameters.get().projectNamespace.orNull)
     }
 
     override fun createClassVisitor(

@@ -3,7 +3,6 @@ package com.jitinsharma.cronetinspector.gradle
 import com.android.build.api.instrumentation.AsmClassVisitorFactory
 import com.android.build.api.instrumentation.ClassContext
 import com.android.build.api.instrumentation.ClassData
-import com.android.build.api.instrumentation.InstrumentationParameters
 import org.objectweb.asm.ClassVisitor
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes
@@ -63,12 +62,22 @@ private val CALLBACK_HOOK_SIGNATURES: Set<Pair<String, String>> = setOf(
  *
  * Originally validated by Milestone 1's detection spike (which this class
  * supersedes with real bytecode rewriting).
+ *
+ * isInstrumentable applies the same project-namespace-or-Cronet-related pre-filter
+ * as [CronetCallSiteVisitorFactory] (see its doc) BEFORE looking at
+ * [ClassData.superClasses] -- computing that full superclass chain is real,
+ * non-trivial work AGP has to do for every candidate class, and no unrelated
+ * dependency (AndroidX, Compose, Kotlin stdlib, ...) has ever been found defining a
+ * `UrlRequest.Callback`/`UploadDataProvider` subclass, so it's safe to skip that
+ * computation entirely for classes the pre-filter already rules out.
  */
 abstract class CronetCallbackHookVisitorFactory :
-    AsmClassVisitorFactory<InstrumentationParameters.None> {
+    AsmClassVisitorFactory<CronetCallSiteParams> {
 
     override fun isInstrumentable(classData: ClassData): Boolean {
-        if (classData.className.startsWith("org.chromium.net.")) return false
+        val className = classData.className
+        if (className.startsWith("org.chromium.net.")) return false
+        if (!isProjectOrCronetRelated(className, parameters.get().projectNamespace.orNull)) return false
         return classData.superClasses.any { it == URL_REQUEST_CALLBACK || it == UPLOAD_DATA_PROVIDER }
     }
 

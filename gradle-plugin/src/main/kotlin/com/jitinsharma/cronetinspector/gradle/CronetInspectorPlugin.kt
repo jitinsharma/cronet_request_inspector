@@ -43,7 +43,7 @@ class CronetInspectorPlugin : Plugin<Project> {
                 variant.instrumentation.transformClassesWith(
                     CronetCallbackHookVisitorFactory::class.java,
                     InstrumentationScope.ALL,
-                ) { }
+                ) { params -> params.projectNamespace.set(projectNamespace) }
                 variant.instrumentation.transformClassesWith(
                     CronetCallSiteVisitorFactory::class.java,
                     InstrumentationScope.ALL,
