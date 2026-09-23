@@ -10,7 +10,7 @@ plugins {
 }
 
 group = "com.jitinsharma.cronetinspector"
-version = "0.1.2"
+version = "0.1.3"
 
 dependencies {
     compileOnly("com.android.tools.build:gradle:9.1.1")

@@ -54,7 +54,7 @@ dependencies {
 
 intellijPlatform {
     pluginConfiguration {
-        version.set("0.1.0")
+        version.set("0.1.1")
     }
 }
 

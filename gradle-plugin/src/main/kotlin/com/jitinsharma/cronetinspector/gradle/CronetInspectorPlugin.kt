@@ -77,7 +77,7 @@ class CronetInspectorPlugin : Plugin<Project> {
 
                     val runtimeProject = project.rootProject.findProject(":runtime")
                     val runtimeDependencyNotation: Any =
-                        runtimeProject ?: "com.jitinsharma.cronetinspector:runtime:0.1.0"
+                        runtimeProject ?: "com.jitinsharma.cronetinspector:runtime:0.1.1"
                     project.dependencies.add("${variant.name}Implementation", runtimeDependencyNotation)
                 }
             }
