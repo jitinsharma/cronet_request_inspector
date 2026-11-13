@@ -1,4 +1,4 @@
-# Cronet Network Inspector
+# Cronet Request Inspector
 
 Network visibility for [Cronet](https://developer.android.com/develop/connectivity/cronet)-based
 Android apps, inside Android Studio, with zero app code changes.
