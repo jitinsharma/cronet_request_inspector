@@ -15,4 +15,6 @@ captures/
 
 # Reference screenshots of Android Studio's own built-in Network Inspector (used as
 # design reference for the idea-plugin UI) -- not our own tool's UI, kept local only.
-Screenshot*.png
+# Scoped to design/ specifically so it doesn't also catch real screenshots of our
+# own UI elsewhere (e.g. screenshots/screenshot.png, used in the README).
+design/Screenshot*.png

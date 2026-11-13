@@ -128,18 +128,11 @@ creation and supplying credentials.
    `repo1.maven.org` / search can take up to a couple hours after a successful
    deployment.
 
-### JetBrains Marketplace (`idea-plugin`)
+### JetBrains Marketplace (`idea-plugin`) -- DONE
 
-1. Create a JetBrains Marketplace account and register a unique plugin ID (the
-   current `com.jitinsharma.cronetinspector.ideaplugin` in `plugin.xml` is a placeholder --
-   confirm it's actually available, or pick a different one).
-2. Add a real plugin icon, a Marketplace-quality description, and a changelog.
-3. Sign the plugin (`intellijPlatform.signing` in the IntelliJ Platform Gradle
-   Plugin's DSL) with a certificate chain -- required for Marketplace uploads.
-4. `./gradlew :idea-plugin:publishPlugin` with the token supplied via Gradle
-   property/env var.
+Live at https://plugins.jetbrains.com/plugin/34379-cronet-network-inspector/.
 
-Worth doing before any of this: `idea-plugin/build.gradle.kts` depends on
+Worth knowing for future publishes: `idea-plugin/build.gradle.kts` depends on
 `local(path)` against an installed Android Studio copy (path overridable via the
 `androidStudio.localPath` Gradle property, with a clear error if it's missing --
 see its own comments for why `androidStudio(version)`'s normal remote resolution is
